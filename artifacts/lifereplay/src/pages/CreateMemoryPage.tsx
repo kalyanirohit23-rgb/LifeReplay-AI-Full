@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Image, Video, Mic, Square, X, Plus } from "lucide-react";
+import { ArrowLeft, Image, Video, Mic, Square, X, Plus, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createMemory } from "@/hooks/useMemories";
-import { useMediaUpload, getMediaType } from "@/hooks/useMediaUpload";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { getErrorMessage } from "@/lib/errors";
 
 const schema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -34,6 +35,7 @@ export default function CreateMemoryPage() {
   const [voices, setVoices] = useState<FilePreview[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const { uploadMultiple } = useMediaUpload();
@@ -97,6 +99,7 @@ export default function CreateMemoryPage() {
 
   const onSubmit = async (values: FormValues) => {
     setSaving(true);
+    setSaveError(null);
     try {
       const tags = values.tags
         ? values.tags.split(",").map(t => t.trim()).filter(Boolean)
@@ -119,7 +122,10 @@ export default function CreateMemoryPage() {
       toast.success("Memory saved!");
       setLocation(`/memories/${memory.id}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save memory");
+      const msg = getErrorMessage(err);
+      console.error("[CreateMemoryPage] save error:", err);
+      setSaveError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -141,6 +147,17 @@ export default function CreateMemoryPage() {
           <p className="text-xs text-muted-foreground">Capture a moment from your life</p>
         </div>
       </div>
+
+      {/* Inline error banner */}
+      {saveError && (
+        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl p-4 text-sm">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="font-semibold">Failed to save memory</p>
+            <p className="mt-0.5 break-words">{saveError}</p>
+          </div>
+        </div>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">

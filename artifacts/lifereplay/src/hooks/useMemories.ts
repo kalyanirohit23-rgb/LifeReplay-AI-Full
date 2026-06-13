@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { toError, interpretSupabaseError } from "@/lib/errors";
 import type { Memory, MemoryInsert, MemoryWithMedia } from "@/lib/database.types";
 
 export interface SearchFilters {
@@ -44,16 +45,23 @@ export function useMemories(filters?: SearchFilters) {
         query = query.overlaps("tags", filters.tags);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setMemories((data as MemoryWithMedia[]) ?? []);
+      const { data, error: qErr } = await query;
+      if (qErr) throw qErr;
+      setMemories((data as unknown as MemoryWithMedia[]) ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load memories");
+      const msg = interpretSupabaseError(err);
+      console.error("[useMemories] fetch error:", err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [filters?.query, filters?.year, filters?.location,
-      JSON.stringify(filters?.tags), filters?.mediaType]);
+  }, [
+    filters?.query,
+    filters?.year,
+    filters?.location,
+    JSON.stringify(filters?.tags),
+    filters?.mediaType,
+  ]);
 
   useEffect(() => {
     fetchMemories();
@@ -74,9 +82,13 @@ export function useMemory(id: string) {
       .select("*, memory_media(*)")
       .eq("id", id)
       .single()
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else setMemory(data as MemoryWithMedia);
+      .then(({ data, error: qErr }) => {
+        if (qErr) {
+          console.error("[useMemory] fetch error:", qErr);
+          setError(interpretSupabaseError(qErr));
+        } else {
+          setMemory(data as unknown as MemoryWithMedia);
+        }
         setLoading(false);
       });
   }, [id]);
@@ -86,7 +98,9 @@ export function useMemory(id: string) {
 
 export async function createMemory(input: MemoryInsert): Promise<Memory> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Not authenticated. Please sign in again.");
+
+  console.log("[createMemory] inserting:", { ...input, user_id: user.id });
 
   const { data, error } = await supabase
     .from("memories")
@@ -94,11 +108,18 @@ export async function createMemory(input: MemoryInsert): Promise<Memory> {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[createMemory] Supabase error:", error);
+    throw toError(interpretSupabaseError(error));
+  }
+
+  console.log("[createMemory] success:", data);
   return data as Memory;
 }
 
 export async function updateMemory(id: string, input: Partial<MemoryInsert>): Promise<Memory> {
+  console.log("[updateMemory] updating:", id, input);
+
   const { data, error } = await supabase
     .from("memories")
     .update({ ...input, updated_at: new Date().toISOString() })
@@ -106,13 +127,20 @@ export async function updateMemory(id: string, input: Partial<MemoryInsert>): Pr
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[updateMemory] Supabase error:", error);
+    throw toError(interpretSupabaseError(error));
+  }
+
   return data as Memory;
 }
 
 export async function deleteMemory(id: string): Promise<void> {
   const { error } = await supabase.from("memories").delete().eq("id", id);
-  if (error) throw error;
+  if (error) {
+    console.error("[deleteMemory] Supabase error:", error);
+    throw toError(interpretSupabaseError(error));
+  }
 }
 
 export function useAvailableYears() {
@@ -123,11 +151,16 @@ export function useAvailableYears() {
       .from("memories")
       .select("memory_date")
       .order("memory_date", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          // Silently ignore — years filter just won't show up
+          console.warn("[useAvailableYears] error:", error);
+          return;
+        }
         if (!data) return;
-        const uniqueYears = [...new Set(
-          data.map(m => new Date(m.memory_date).getFullYear())
-        )].sort((a, b) => b - a);
+        const uniqueYears = [
+          ...new Set(data.map((m) => new Date(m.memory_date).getFullYear())),
+        ].sort((a, b) => b - a);
         setYears(uniqueYears);
       });
   }, []);
