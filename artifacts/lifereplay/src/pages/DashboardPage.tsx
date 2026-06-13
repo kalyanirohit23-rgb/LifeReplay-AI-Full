@@ -10,54 +10,45 @@ const SETUP_SQL = `-- Run this in Supabase Dashboard → SQL Editor → New Quer
 create extension if not exists "uuid-ossp";
 
 create table if not exists public.memories (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references auth.users(id) on delete cascade not null,
-  title text not null,
-  description text,
-  memory_date date not null,
-  location text,
-  tags text[],
-  created_at timestamptz default now() not null,
-  updated_at timestamptz default now() not null
+  id            uuid default uuid_generate_v4() primary key,
+  user_id       uuid references auth.users(id) on delete cascade not null,
+  title         text not null,
+  body          text,
+  memory_date   date not null,
+  memory_type   text check (memory_type in ('personal','travel','family','work','celebration','milestone','other')),
+  location_id   uuid,
+  created_at    timestamptz default now() not null
 );
 
 create table if not exists public.memory_media (
-  id uuid default uuid_generate_v4() primary key,
-  memory_id uuid references public.memories(id) on delete cascade not null,
-  user_id uuid references auth.users(id) on delete cascade not null,
-  type text check (type in ('photo', 'video', 'voice')) not null,
-  file_name text not null,
-  file_url text not null,
-  file_size bigint,
-  mime_type text,
+  id               uuid default uuid_generate_v4() primary key,
+  memory_id        uuid references public.memories(id) on delete cascade not null,
+  user_id          uuid references auth.users(id) on delete cascade not null,
+  type             text check (type in ('photo', 'video', 'voice')) not null,
+  file_name        text not null,
+  file_url         text not null,
+  file_size        bigint,
+  mime_type        text,
   duration_seconds integer,
-  created_at timestamptz default now() not null
+  created_at       timestamptz default now() not null
 );
 
 alter table public.memories enable row level security;
 alter table public.memory_media enable row level security;
 
-create policy "Users can view own memories" on public.memories
-  for select using (auth.uid() = user_id);
-create policy "Users can insert own memories" on public.memories
-  for insert with check (auth.uid() = user_id);
-create policy "Users can update own memories" on public.memories
-  for update using (auth.uid() = user_id);
-create policy "Users can delete own memories" on public.memories
-  for delete using (auth.uid() = user_id);
+create policy "Users can view own memories"   on public.memories for select using (auth.uid() = user_id);
+create policy "Users can insert own memories" on public.memories for insert with check (auth.uid() = user_id);
+create policy "Users can update own memories" on public.memories for update using (auth.uid() = user_id);
+create policy "Users can delete own memories" on public.memories for delete using (auth.uid() = user_id);
 
-create policy "Users can view own media" on public.memory_media
-  for select using (auth.uid() = user_id);
-create policy "Users can insert own media" on public.memory_media
-  for insert with check (auth.uid() = user_id);
-create policy "Users can update own media" on public.memory_media
-  for update using (auth.uid() = user_id);
-create policy "Users can delete own media" on public.memory_media
-  for delete using (auth.uid() = user_id);
+create policy "Users can view own media"   on public.memory_media for select using (auth.uid() = user_id);
+create policy "Users can insert own media" on public.memory_media for insert with check (auth.uid() = user_id);
+create policy "Users can update own media" on public.memory_media for update using (auth.uid() = user_id);
+create policy "Users can delete own media" on public.memory_media for delete using (auth.uid() = user_id);
 
-create index if not exists memories_user_id_idx on public.memories(user_id);
-create index if not exists memories_memory_date_idx on public.memories(memory_date desc);
-create index if not exists memory_media_memory_id_idx on public.memory_media(memory_id);`;
+create index if not exists memories_user_id_idx    on public.memories(user_id);
+create index if not exists memories_date_idx       on public.memories(memory_date desc);
+create index if not exists memory_media_memory_idx on public.memory_media(memory_id);`;
 
 function DatabaseSetupBanner({ error }: { error: string }) {
   const [expanded, setExpanded] = useState(false);

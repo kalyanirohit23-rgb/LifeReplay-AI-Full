@@ -107,16 +107,33 @@ export default function CreateMemoryPage() {
     };
 
     try {
+      // ── Step 1: Save the memory record ──────────────────────────────
       const memory = await createMemory(insertInput);
 
-      const allUploads: Promise<unknown>[] = [];
-      if (photos.length > 0) allUploads.push(uploadMultiple(photos.map(p => p.file), memory.id, "photo"));
-      if (videos.length > 0) allUploads.push(uploadMultiple(videos.map(v => v.file), memory.id, "video"));
-      if (voices.length > 0) allUploads.push(uploadMultiple(voices.map(v => v.file), memory.id, "voice"));
-      await Promise.all(allUploads);
+      // ── Step 2: Upload media — failure is non-fatal ──────────────────
+      // The memory is already saved. If the storage bucket isn't set up yet,
+      // we still navigate to the dashboard and warn the user.
+      const hasMedia = photos.length > 0 || videos.length > 0 || voices.length > 0;
+      if (hasMedia) {
+        try {
+          const allUploads: Promise<unknown>[] = [];
+          if (photos.length > 0) allUploads.push(uploadMultiple(photos.map(p => p.file), memory.id, "photo"));
+          if (videos.length > 0) allUploads.push(uploadMultiple(videos.map(v => v.file), memory.id, "video"));
+          if (voices.length > 0) allUploads.push(uploadMultiple(voices.map(v => v.file), memory.id, "voice"));
+          await Promise.all(allUploads);
+          toast.success("Memory saved!");
+        } catch (uploadErr: unknown) {
+          const uploadMsg = getErrorMessage(uploadErr);
+          console.error("[CreateMemoryPage] ⚠️ media upload failed (memory still saved):", uploadErr);
+          toast.success("Memory saved!");
+          toast.error(`Media upload failed: ${uploadMsg}`, { duration: 8000 });
+        }
+      } else {
+        toast.success("Memory saved!");
+      }
 
-      toast.success("Memory saved!");
-      navigate(`/memories/${memory.id}`);
+      // ── Step 3: Go to dashboard (triggers refetch) ───────────────────
+      navigate("/");
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
       console.error("[CreateMemoryPage] ❌ save failed:", err);
