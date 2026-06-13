@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { createMemory } from "@/hooks/useMemories";
+import { createMemory, type CreateMemoryInput } from "@/hooks/useMemories";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { getErrorMessage } from "@/lib/errors";
 import { MEMORY_TYPE_LABELS, type MemoryType } from "@/lib/database.types";
@@ -99,23 +99,15 @@ export default function CreateMemoryPage() {
     setSaving(true);
     setSaveError(null);
 
-    // ── Log exactly what we're about to send ────────────────────────────
-    const insertPayload = {
+    const insertInput: CreateMemoryInput = {
       title:       values.title,
       body:        values.body || null,
       memory_date: values.memory_date,
       memory_type: values.memory_type || null,
-      location_id: null,
     };
-    console.group("[CreateMemoryPage] About to INSERT into memories");
-    console.log("Table:   memories");
-    console.log("Columns:", Object.keys(insertPayload));
-    console.log("Payload:", JSON.stringify(insertPayload, null, 2));
-    console.groupEnd();
-    // ─────────────────────────────────────────────────────────────────────
 
     try {
-      const memory = await createMemory(insertPayload);
+      const memory = await createMemory(insertInput);
 
       const allUploads: Promise<unknown>[] = [];
       if (photos.length > 0) allUploads.push(uploadMultiple(photos.map(p => p.file), memory.id, "photo"));

@@ -119,20 +119,48 @@ export function useMemory(id: string) {
   return { memory, loading, error };
 }
 
-export async function createMemory(input: MemoryInsert): Promise<Memory> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated. Please sign in again.");
+export interface CreateMemoryInput {
+  title: string;
+  body: string | null;
+  memory_date: string;
+  memory_type: string | null;
+}
 
-  const payload = { ...input, user_id: user.id };
+export async function createMemory(input: CreateMemoryInput): Promise<Memory> {
+  // ── 1. Require authenticated user ────────────────────────────────────
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) {
+    const msg = authError?.message ?? "No authenticated session found.";
+    console.error("[createMemory] ❌ getUser() failed:", authError);
+    throw new Error(`Authentication error: ${msg}. Please sign in again.`);
+  }
+  const user_id = authData.user.id;
 
-  // ── Detailed diagnostic logging ──────────────────────────────────────
+  // ── 2. Build the exact insert payload ────────────────────────────────
+  const payload: {
+    user_id: string;
+    title: string;
+    body: string | null;
+    memory_date: string;
+    memory_type: string | null;
+  } = {
+    user_id,
+    title:       input.title,
+    body:        input.body,
+    memory_date: input.memory_date,
+    memory_type: input.memory_type,
+  };
+
+  // ── 3. Log what is being inserted ────────────────────────────────────
   console.group(`[createMemory] INSERT into "${TABLE}"`);
-  console.log("Table:  ", TABLE);
-  console.log("Columns being sent:", Object.keys(payload));
-  console.log("Full payload:", JSON.stringify(payload, null, 2));
+  console.log("Table        :", TABLE);
+  console.log("Columns      :", Object.keys(payload));
+  console.log("user_id      :", user_id);
+  console.log("Full payload :", JSON.stringify(payload, null, 2));
   console.groupEnd();
   // ─────────────────────────────────────────────────────────────────────
 
+  // ── 4. Insert ─────────────────────────────────────────────────────────
   const { data, error } = await supabase
     .from(TABLE)
     .insert(payload)
@@ -140,18 +168,19 @@ export async function createMemory(input: MemoryInsert): Promise<Memory> {
     .single();
 
   if (error) {
-    console.group(`[createMemory] ❌ Supabase error on INSERT into "${TABLE}"`);
+    // Log every field of the raw Supabase error so nothing is hidden
+    console.group(`[createMemory] ❌ Supabase INSERT error on "${TABLE}"`);
     console.error("message :", error.message);
     console.error("code    :", error.code);
     console.error("hint    :", error.hint);
     console.error("details :", error.details);
     console.error("Full error object:", error);
-    console.error("Payload that caused this error:", JSON.stringify(payload, null, 2));
+    console.error("Payload that caused this:", JSON.stringify(payload, null, 2));
     console.groupEnd();
     throw toError(interpretSupabaseError(error));
   }
 
-  console.log(`[createMemory] ✅ success, id=${(data as Memory).id}`);
+  console.log(`[createMemory] ✅ success — id: ${(data as Memory).id}`);
   return data as Memory;
 }
 
