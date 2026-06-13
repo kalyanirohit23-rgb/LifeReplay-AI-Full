@@ -1,4 +1,5 @@
-import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
+import { useEffect } from "react";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,7 +20,19 @@ const queryClient = new QueryClient({
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
+
+  // Use useEffect + navigate() instead of conditional <Redirect> renders.
+  // Conditional <Redirect> is unreliable in wouter v3 outside a <Switch>.
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user && location !== "/") {
+      navigate("/");
+    } else if (user && location === "/") {
+      navigate("/dashboard");
+    }
+  }, [user, loading, location, navigate]);
 
   if (loading) {
     return (
@@ -32,13 +45,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user && location !== "/") {
-    return <Redirect to="/" />;
-  }
-
-  if (user && location === "/") {
-    return <Redirect to="/dashboard" />;
-  }
+  // While redirect is pending don't flash the wrong page
+  if (!user && location !== "/") return null;
+  if (user && location === "/") return null;
 
   return <>{children}</>;
 }
@@ -84,7 +93,6 @@ function App() {
       <Toaster
         position="top-center"
         richColors
-        theme="dark"
         toastOptions={{ className: "font-sans" }}
       />
     </QueryClientProvider>

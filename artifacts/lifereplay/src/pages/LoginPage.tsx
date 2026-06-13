@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { BookOpen, Eye, EyeOff, Chrome } from "lucide-react";
+import { useLocation } from "wouter";
+import { BookOpen, Eye, EyeOff, Chrome, AlertCircle } from "lucide-react";
 import { signInWithEmail, signUpWithEmail, signInWithGoogle, resetPassword } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -16,12 +17,31 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+function InlineError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <div
+      role="alert"
+      data-testid="auth-error"
+      className="flex items-start gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-3 py-2.5 text-sm"
+    >
+      <AlertCircle size={15} className="mt-0.5 shrink-0" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
 export default function LoginPage() {
+  const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signInLoading, setSignInLoading] = useState(false);
+  const [signUpLoading, setSignUpLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const signInForm = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -34,26 +54,40 @@ export default function LoginPage() {
   });
 
   const handleSignIn = async (values: FormValues) => {
-    setLoading(true);
+    setSignInError(null);
+    setSignInLoading(true);
     try {
       await signInWithEmail(values.email, values.password);
-      toast.success("Welcome back!");
+      // Navigate immediately — don't wait for onAuthStateChange to propagate
+      navigate("/dashboard");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Sign in failed");
+      const msg = err instanceof Error ? err.message : "Sign in failed. Please try again.";
+      console.error("[Auth] signInWithPassword error:", msg);
+      setSignInError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      setSignInLoading(false);
     }
   };
 
   const handleSignUp = async (values: FormValues) => {
-    setLoading(true);
+    setSignUpError(null);
+    setSignUpLoading(true);
     try {
-      await signUpWithEmail(values.email, values.password);
-      toast.success("Account created! Check your email to confirm.");
+      const result = await signUpWithEmail(values.email, values.password);
+      // Supabase returns a session immediately if email confirmation is disabled
+      if (result.session) {
+        navigate("/dashboard");
+      } else {
+        toast.success("Check your email to confirm your account, then sign in.");
+      }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Sign up failed");
+      const msg = err instanceof Error ? err.message : "Sign up failed. Please try again.";
+      console.error("[Auth] signUp error:", msg);
+      setSignUpError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      setSignUpLoading(false);
     }
   };
 
@@ -61,20 +95,27 @@ export default function LoginPage() {
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
+      // Page will redirect to OAuth provider — no further action needed
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Google sign in failed");
+      const msg = err instanceof Error ? err.message : "Google sign in failed";
+      console.error("[Auth] signInWithGoogle error:", msg);
+      toast.error(msg);
       setGoogleLoading(false);
     }
   };
 
   const handleForgot = async () => {
     if (!forgotEmail) return;
+    setForgotLoading(true);
     try {
       await resetPassword(forgotEmail);
-      toast.success("Password reset email sent!");
+      toast.success("Password reset email sent! Check your inbox.");
       setForgotMode(false);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to send reset email");
+      const msg = err instanceof Error ? err.message : "Failed to send reset email";
+      toast.error(msg);
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -116,9 +157,10 @@ export default function LoginPage() {
               <Button
                 data-testid="button-send-reset"
                 onClick={handleForgot}
+                disabled={forgotLoading}
                 className="w-full bg-primary text-primary-foreground"
               >
-                Send reset link
+                {forgotLoading ? "Sending…" : "Send reset link"}
               </Button>
               <button
                 data-testid="button-back-to-login"
@@ -149,6 +191,7 @@ export default function LoginPage() {
                             <Input
                               data-testid="input-signin-email"
                               type="email"
+                              autoComplete="email"
                               placeholder="your@email.com"
                               className="bg-background"
                               {...field}
@@ -169,6 +212,7 @@ export default function LoginPage() {
                               <Input
                                 data-testid="input-signin-password"
                                 type={showPassword ? "text" : "password"}
+                                autoComplete="current-password"
                                 placeholder="••••••••"
                                 className="bg-background pr-10"
                                 {...field}
@@ -186,21 +230,25 @@ export default function LoginPage() {
                         </FormItem>
                       )}
                     />
+
+                    <InlineError message={signInError} />
+
                     <button
                       type="button"
                       data-testid="button-forgot-password"
-                      onClick={() => setForgotMode(true)}
+                      onClick={() => { setSignInError(null); setForgotMode(true); }}
                       className="text-xs text-primary hover:underline"
                     >
                       Forgot password?
                     </button>
+
                     <Button
                       data-testid="button-signin-submit"
                       type="submit"
-                      disabled={loading}
+                      disabled={signInLoading}
                       className="w-full bg-primary text-primary-foreground font-semibold"
                     >
-                      {loading ? "Signing in…" : "Sign in"}
+                      {signInLoading ? "Signing in…" : "Sign in"}
                     </Button>
                   </form>
                 </Form>
@@ -237,6 +285,7 @@ export default function LoginPage() {
                             <Input
                               data-testid="input-signup-email"
                               type="email"
+                              autoComplete="email"
                               placeholder="your@email.com"
                               className="bg-background"
                               {...field}
@@ -257,6 +306,7 @@ export default function LoginPage() {
                               <Input
                                 data-testid="input-signup-password"
                                 type={showPassword ? "text" : "password"}
+                                autoComplete="new-password"
                                 placeholder="••••••••"
                                 className="bg-background pr-10"
                                 {...field}
@@ -274,13 +324,16 @@ export default function LoginPage() {
                         </FormItem>
                       )}
                     />
+
+                    <InlineError message={signUpError} />
+
                     <Button
                       data-testid="button-signup-submit"
                       type="submit"
-                      disabled={loading}
+                      disabled={signUpLoading}
                       className="w-full bg-primary text-primary-foreground font-semibold"
                     >
-                      {loading ? "Creating account…" : "Create account"}
+                      {signUpLoading ? "Creating account…" : "Create account"}
                     </Button>
                   </form>
                 </Form>
