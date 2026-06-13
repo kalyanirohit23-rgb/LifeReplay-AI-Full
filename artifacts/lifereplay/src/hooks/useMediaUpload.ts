@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { toError, interpretSupabaseError } from "@/lib/errors";
 import type { MediaType, MemoryMedia, MemoryMediaInsert } from "@/lib/database.types";
 
+const BUCKET = "memory-media" as const;
+
 export interface UploadProgress {
   fileName: string;
   progress: number;
@@ -19,53 +21,74 @@ export function useMediaUpload() {
     memoryId: string,
     type: MediaType
   ): Promise<MemoryMedia> {
+    // ── Auth ──────────────────────────────────────────────────────────
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const ext = file.name.split(".").pop() ?? "";
+    // ── Build storage path ────────────────────────────────────────────
+    const ext      = file.name.split(".").pop() ?? "bin";
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const path = `${user.id}/${memoryId}/${type}/${safeName}`;
+    const path     = `${user.id}/${memoryId}/${type}/${safeName}`;
 
     setProgress((prev) => [
       ...prev,
       { fileName: file.name, progress: 0, status: "uploading" },
     ]);
 
-    console.log("[upload] uploading to storage:", path);
+    // ── Step 1: Upload to Supabase Storage ────────────────────────────
+    console.group(`[upload] → storage bucket="${BUCKET}"`);
+    console.log("file    :", file.name, `(${(file.size / 1024).toFixed(1)} KB, ${file.type})`);
+    console.log("path    :", path);
+    console.log("type    :", type);
+    console.groupEnd();
 
-    const { error: uploadError } = await supabase.storage
-      .from("memory-media")
+    const { data: storageData, error: uploadError } = await supabase.storage
+      .from(BUCKET)
       .upload(path, file, { upsert: false });
 
     if (uploadError) {
-      const msg = interpretSupabaseError(uploadError);
-      console.error("[upload] storage error:", uploadError);
+      console.group(`[upload] ❌ storage error on bucket="${BUCKET}"`);
+      console.error("message :", uploadError.message);
+      console.error("status  :", (uploadError as { statusCode?: number }).statusCode);
+      console.error("full    :", uploadError);
+      console.groupEnd();
+
       setProgress((prev) =>
         prev.map((p) =>
-          p.fileName === file.name ? { ...p, status: "error", error: msg } : p
+          p.fileName === file.name
+            ? { ...p, status: "error", error: uploadError.message }
+            : p
         )
       );
       throw toError(
-        `Storage upload failed: ${msg}. ` +
-        "Make sure the 'memory-media' bucket exists in Supabase Storage."
+        `Storage upload failed: ${uploadError.message}. ` +
+        `Bucket="${BUCKET}". Check that the bucket exists and storage policies allow authenticated uploads.`
       );
     }
 
+    console.log(`[upload] ✅ storage success — path: ${storageData.path}`);
+
+    // ── Step 2: Get public URL ────────────────────────────────────────
     const { data: { publicUrl } } = supabase.storage
-      .from("memory-media")
+      .from(BUCKET)
       .getPublicUrl(path);
 
-    console.log("[upload] storage done, publicUrl:", publicUrl);
+    console.log("[upload] public URL:", publicUrl);
 
+    // ── Step 3: Record in memory_media table ──────────────────────────
     const mediaInsert: MemoryMediaInsert = {
       memory_id: memoryId,
-      user_id: user.id,
+      user_id:   user.id,
       type,
       file_name: file.name,
-      file_url: publicUrl,
+      file_url:  publicUrl,
       file_size: file.size,
       mime_type: file.type,
     };
+
+    console.group(`[upload] INSERT into "memory_media"`);
+    console.log("payload:", JSON.stringify(mediaInsert, null, 2));
+    console.groupEnd();
 
     const { data, error: dbError } = await supabase
       .from("memory_media")
@@ -74,9 +97,16 @@ export function useMediaUpload() {
       .single();
 
     if (dbError) {
-      console.error("[upload] DB insert error:", dbError);
+      console.group(`[upload] ❌ memory_media DB insert error`);
+      console.error("message :", dbError.message);
+      console.error("code    :", dbError.code);
+      console.error("hint    :", dbError.hint);
+      console.error("details :", dbError.details);
+      console.groupEnd();
       throw toError(interpretSupabaseError(dbError));
     }
+
+    console.log(`[upload] ✅ memory_media record saved — id: ${(data as MemoryMedia).id}`);
 
     setProgress((prev) =>
       prev.map((p) =>
@@ -105,17 +135,23 @@ export function useMediaUpload() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
+    // Remove from storage
     try {
-      const urlObj = new URL(fileUrl);
-      const pathParts = urlObj.pathname.split("/storage/v1/object/public/memory-media/");
-      if (pathParts[1]) {
-        await supabase.storage.from("memory-media").remove([pathParts[1]]);
+      const urlObj   = new URL(fileUrl);
+      const pathPart = urlObj.pathname.split(`/storage/v1/object/public/${BUCKET}/`)[1];
+      if (pathPart) {
+        const { error } = await supabase.storage.from(BUCKET).remove([pathPart]);
+        if (error) console.warn("[deleteMedia] storage remove warning:", error.message);
+        else console.log("[deleteMedia] ✅ storage file removed:", pathPart);
       }
     } catch (e) {
-      console.warn("[deleteMedia] Could not remove storage file:", e);
+      console.warn("[deleteMedia] Could not parse storage URL:", e);
     }
 
-    await supabase.from("memory_media").delete().eq("id", mediaId);
+    // Remove DB record
+    const { error } = await supabase.from("memory_media").delete().eq("id", mediaId);
+    if (error) console.error("[deleteMedia] DB delete error:", error);
+    else console.log("[deleteMedia] ✅ memory_media record deleted:", mediaId);
   }
 
   return { uploadMultiple, uploading, progress, deleteMedia };

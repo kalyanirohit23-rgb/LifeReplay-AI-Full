@@ -1,9 +1,40 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Plus, Image, Video, Mic, BookOpen, Clock, ArrowRight, AlertTriangle, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { Plus, Image, Video, Mic, BookOpen, Clock, ArrowRight, AlertTriangle, ChevronDown, ChevronUp, Copy, Check, HardDrive } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMemories } from "@/hooks/useMemories";
 import MemoryCard from "@/components/memories/MemoryCard";
+
+const STORAGE_POLICY_SQL = `-- Run in Supabase Dashboard → SQL Editor → New Query
+-- Configures storage policies for the memory-media bucket
+
+-- 1. Authenticated users can upload files
+create policy "Authenticated users can upload media"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'memory-media');
+
+-- 2. Authenticated users can view files
+create policy "Authenticated users can view media"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'memory-media');
+
+-- Also allow public/anon reads (needed for public bucket URLs in <img> tags)
+create policy "Public can view media"
+  on storage.objects for select
+  to anon
+  using (bucket_id = 'memory-media');
+
+-- 3. Users can only delete their own files
+-- Path format: {user_id}/{memory_id}/{type}/{filename}
+create policy "Users can delete own media"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'memory-media'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );`;
 
 const SETUP_SQL = `-- Run this in Supabase Dashboard → SQL Editor → New Query
 
@@ -120,6 +151,84 @@ function DatabaseSetupBanner({ error }: { error: string }) {
   );
 }
 
+const STORAGE_POLICY_DISMISSED_KEY = "lifereplay-storage-policy-dismissed";
+
+function StoragePoliciesBanner() {
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem(STORAGE_POLICY_DISMISSED_KEY) === "true"
+  );
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  if (dismissed) return null;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(STORAGE_POLICY_SQL);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem(STORAGE_POLICY_DISMISSED_KEY, "true");
+    setDismissed(true);
+  };
+
+  return (
+    <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl overflow-hidden">
+      <div className="flex items-start gap-3 p-4">
+        <HardDrive size={16} className="text-sky-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground">Storage policies needed</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Run the SQL below in Supabase to allow photo, video, and voice uploads to the{" "}
+            <code className="font-mono bg-muted px-1 rounded">memory-media</code> bucket.
+          </p>
+          <a
+            href="https://supabase.com/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline mt-1 inline-block"
+          >
+            Open Supabase Dashboard →
+          </a>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          <button
+            onClick={handleDismiss}
+            className="text-muted-foreground hover:text-foreground transition-colors text-xs"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-sky-500/20">
+          <div className="flex items-center justify-between px-4 py-2 bg-muted/50">
+            <span className="text-xs text-muted-foreground font-mono">SQL Editor → New Query → Paste & Run</span>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              {copied ? <><Check size={12} /> Copied!</> : <><Copy size={12} /> Copy SQL</>}
+            </button>
+          </div>
+          <pre className="p-4 text-xs font-mono text-muted-foreground overflow-x-auto max-h-64 whitespace-pre-wrap break-all bg-muted/30">
+            {STORAGE_POLICY_SQL}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatCard({ icon: Icon, label, value, color }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
@@ -197,6 +306,9 @@ export default function DashboardPage() {
 
       {/* DB setup / error banner */}
       {error && <DatabaseSetupBanner error={error} />}
+
+      {/* Storage policies setup banner */}
+      {!error && <StoragePoliciesBanner />}
 
       {/* Stats */}
       {!error && (
