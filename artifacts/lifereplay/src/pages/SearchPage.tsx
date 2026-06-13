@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Search, MapPin, Calendar, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Search, Calendar, Sparkles, SlidersHorizontal, Tag } from "lucide-react";
 import { useMemories, useAvailableYears } from "@/hooks/useMemories";
 import MemoryCard from "@/components/memories/MemoryCard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { MEMORY_TYPE_LABELS } from "@/lib/database.types";
 
 function MemorySkeleton() {
   return (
@@ -20,30 +21,36 @@ function MemorySkeleton() {
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
-  const [location, setLocation] = useState("");
+  const [selectedType, setSelectedType] = useState<string>("");
   const years = useAvailableYears();
 
   const { memories, loading } = useMemories({
-    query: query || undefined,
-    year: selectedYear,
-    location: location || undefined,
+    query:      query || undefined,
+    year:       selectedYear,
+    memoryType: selectedType || undefined,
   });
 
-  const hasFilters = query || selectedYear || location;
+  const hasFilters = query || selectedYear || selectedType;
+
+  const clearFilters = () => {
+    setQuery("");
+    setSelectedYear(undefined);
+    setSelectedType("");
+  };
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="pt-2">
         <h1 className="font-serif text-2xl font-semibold text-foreground">Search</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Find memories by title, location, year, and more</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Find memories by title, type, and year</p>
       </div>
 
       {/* Metadata Search */}
       <div className="bg-card border border-card-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <SlidersHorizontal size={14} className="text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Metadata search</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filters</span>
         </div>
 
         {/* Keyword */}
@@ -52,24 +59,45 @@ export default function SearchPage() {
           <Input
             data-testid="input-search-query"
             type="search"
-            placeholder="Search by title or description…"
+            placeholder="Search by title or story…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="pl-9 bg-background border-border"
           />
         </div>
 
-        {/* Location */}
-        <div className="relative">
-          <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            data-testid="input-search-location"
-            type="search"
-            placeholder="Filter by location…"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="pl-9 bg-background border-border"
-          />
+        {/* Memory Type */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+            <Tag size={12} /> Filter by type
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              data-testid="button-search-type-all"
+              onClick={() => setSelectedType("")}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                !selectedType
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            {Object.entries(MEMORY_TYPE_LABELS).map(([value, label]) => (
+              <button
+                key={value}
+                data-testid={`button-search-type-${value}`}
+                onClick={() => setSelectedType(selectedType === value ? "" : value)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  selectedType === value
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Year */}
@@ -111,7 +139,6 @@ export default function SearchPage() {
 
       {/* AI Search — placeholder */}
       <div className="bg-card border border-card-border rounded-2xl p-4 relative overflow-hidden">
-        {/* Coming soon overlay */}
         <div className="absolute inset-0 bg-card/60 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-2xl">
           <div className="flex flex-col items-center gap-2 text-center px-4">
             <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs px-3 py-1">
@@ -123,8 +150,6 @@ export default function SearchPage() {
             </p>
           </div>
         </div>
-
-        {/* Disabled form underneath */}
         <div className="opacity-30 pointer-events-none select-none">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={14} className="text-amber-400" />
@@ -132,13 +157,10 @@ export default function SearchPage() {
           </div>
           <textarea
             disabled
-            placeholder="Ask anything about your memories… e.g. 'Show me all summer vacations' or 'Find memories with my family'"
+            placeholder="Ask anything about your memories…"
             className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm resize-none h-20"
           />
-          <button
-            disabled
-            className="mt-2 w-full bg-primary/30 text-primary-foreground/50 py-2 rounded-xl text-sm font-medium"
-          >
+          <button disabled className="mt-2 w-full bg-primary/30 text-primary-foreground/50 py-2 rounded-xl text-sm font-medium">
             Search with AI
           </button>
         </div>
@@ -151,15 +173,13 @@ export default function SearchPage() {
             <h2 className="text-sm font-semibold text-foreground">
               {loading ? "Searching…" : `${memories.length} ${memories.length === 1 ? "result" : "results"}`}
             </h2>
-            {hasFilters && (
-              <button
-                data-testid="button-clear-filters"
-                onClick={() => { setQuery(""); setSelectedYear(undefined); setLocation(""); }}
-                className="text-xs text-primary hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
+            <button
+              data-testid="button-clear-filters"
+              onClick={clearFilters}
+              className="text-xs text-primary hover:underline"
+            >
+              Clear filters
+            </button>
           </div>
 
           {loading ? (

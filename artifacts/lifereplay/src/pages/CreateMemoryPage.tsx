@@ -13,13 +13,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { createMemory } from "@/hooks/useMemories";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { getErrorMessage } from "@/lib/errors";
+import { MEMORY_TYPE_LABELS, type MemoryType } from "@/lib/database.types";
+
+const MEMORY_TYPES = Object.entries(MEMORY_TYPE_LABELS) as [MemoryType, string][];
 
 const schema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
+  title:       z.string().min(1, "Title is required"),
+  body:        z.string().optional(),
   memory_date: z.string().min(1, "Date is required"),
-  location: z.string().optional(),
-  tags: z.string().optional(),
+  memory_type: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -29,7 +31,7 @@ interface FilePreview {
 }
 
 export default function CreateMemoryPage() {
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
   const [photos, setPhotos] = useState<FilePreview[]>([]);
   const [videos, setVideos] = useState<FilePreview[]>([]);
   const [voices, setVoices] = useState<FilePreview[]>([]);
@@ -43,32 +45,28 @@ export default function CreateMemoryPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: "",
-      description: "",
+      title:       "",
+      body:        "",
       memory_date: format(new Date(), "yyyy-MM-dd"),
-      location: "",
-      tags: "",
+      memory_type: "",
     },
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const previews = files.map(f => ({ file: f, url: URL.createObjectURL(f) }));
-    setPhotos(prev => [...prev, ...previews]);
+    setPhotos(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
     e.target.value = "";
   };
 
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const previews = files.map(f => ({ file: f, url: URL.createObjectURL(f) }));
-    setVideos(prev => [...prev, ...previews]);
+    setVideos(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
     e.target.value = "";
   };
 
   const handleVoiceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const previews = files.map(f => ({ file: f, url: URL.createObjectURL(f) }));
-    setVoices(prev => [...prev, ...previews]);
+    setVoices(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
     e.target.value = "";
   };
 
@@ -100,18 +98,24 @@ export default function CreateMemoryPage() {
   const onSubmit = async (values: FormValues) => {
     setSaving(true);
     setSaveError(null);
-    try {
-      const tags = values.tags
-        ? values.tags.split(",").map(t => t.trim()).filter(Boolean)
-        : undefined;
 
-      const memory = await createMemory({
-        title: values.title,
-        description: values.description || null,
-        memory_date: values.memory_date,
-        location: values.location || null,
-        tags: tags && tags.length > 0 ? tags : null,
-      });
+    // ── Log exactly what we're about to send ────────────────────────────
+    const insertPayload = {
+      title:       values.title,
+      body:        values.body || null,
+      memory_date: values.memory_date,
+      memory_type: values.memory_type || null,
+      location_id: null,
+    };
+    console.group("[CreateMemoryPage] About to INSERT into memories");
+    console.log("Table:   memories");
+    console.log("Columns:", Object.keys(insertPayload));
+    console.log("Payload:", JSON.stringify(insertPayload, null, 2));
+    console.groupEnd();
+    // ─────────────────────────────────────────────────────────────────────
+
+    try {
+      const memory = await createMemory(insertPayload);
 
       const allUploads: Promise<unknown>[] = [];
       if (photos.length > 0) allUploads.push(uploadMultiple(photos.map(p => p.file), memory.id, "photo"));
@@ -120,10 +124,10 @@ export default function CreateMemoryPage() {
       await Promise.all(allUploads);
 
       toast.success("Memory saved!");
-      setLocation(`/memories/${memory.id}`);
+      navigate(`/memories/${memory.id}`);
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
-      console.error("[CreateMemoryPage] save error:", err);
+      console.error("[CreateMemoryPage] ❌ save failed:", err);
       setSaveError(msg);
       toast.error(msg);
     } finally {
@@ -148,13 +152,13 @@ export default function CreateMemoryPage() {
         </div>
       </div>
 
-      {/* Inline error banner */}
+      {/* Inline error banner — shows exact Supabase error */}
       {saveError && (
-        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl p-4 text-sm">
+        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl p-4 text-sm mb-5">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="font-semibold">Failed to save memory</p>
-            <p className="mt-0.5 break-words">{saveError}</p>
+            <p className="mt-0.5 break-words whitespace-pre-wrap font-mono text-xs">{saveError}</p>
           </div>
         </div>
       )}
@@ -166,44 +170,10 @@ export default function CreateMemoryPage() {
             <FormItem>
               <FormLabel>Title <span className="text-destructive">*</span></FormLabel>
               <FormControl>
-                <Input data-testid="input-title" placeholder="A title for this memory…" className="bg-card border-card-border text-base font-serif" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-
-          {/* Date & Location */}
-          <div className="grid grid-cols-2 gap-3">
-            <FormField control={form.control} name="memory_date" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Date <span className="text-destructive">*</span></FormLabel>
-                <FormControl>
-                  <Input data-testid="input-date" type="date" className="bg-card border-card-border" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="location" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Location</FormLabel>
-                <FormControl>
-                  <Input data-testid="input-location" placeholder="Where were you?" className="bg-card border-card-border" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-          </div>
-
-          {/* Description */}
-          <FormField control={form.control} name="description" render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea
-                  data-testid="input-description"
-                  placeholder="Tell the story of this memory…"
-                  rows={4}
-                  className="bg-card border-card-border resize-none"
+                <Input
+                  data-testid="input-title"
+                  placeholder="A title for this memory…"
+                  className="bg-card border-card-border text-base font-serif"
                   {...field}
                 />
               </FormControl>
@@ -211,12 +181,54 @@ export default function CreateMemoryPage() {
             </FormItem>
           )} />
 
-          {/* Tags */}
-          <FormField control={form.control} name="tags" render={({ field }) => (
+          {/* Date & Memory Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <FormField control={form.control} name="memory_date" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Date <span className="text-destructive">*</span></FormLabel>
+                <FormControl>
+                  <Input
+                    data-testid="input-date"
+                    type="date"
+                    className="bg-card border-card-border"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="memory_type" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Type</FormLabel>
+                <FormControl>
+                  <select
+                    data-testid="input-memory-type"
+                    className="w-full h-10 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    {...field}
+                  >
+                    <option value="">— Select type —</option>
+                    {MEMORY_TYPES.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </div>
+
+          {/* Body (was "description") */}
+          <FormField control={form.control} name="body" render={({ field }) => (
             <FormItem>
-              <FormLabel>Tags</FormLabel>
+              <FormLabel>Story</FormLabel>
               <FormControl>
-                <Input data-testid="input-tags" placeholder="family, travel, birthday (comma separated)" className="bg-card border-card-border" {...field} />
+                <Textarea
+                  data-testid="input-body"
+                  placeholder="Tell the story of this memory…"
+                  rows={5}
+                  className="bg-card border-card-border resize-none"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -329,7 +341,7 @@ export default function CreateMemoryPage() {
               disabled={saving}
               className="w-full bg-primary text-primary-foreground font-semibold py-3 text-base rounded-xl"
             >
-              {saving ? "Saving memory…" : "Save memory"}
+              {saving ? "Saving…" : "Save memory"}
             </Button>
           </div>
         </form>

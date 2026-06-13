@@ -6,10 +6,10 @@ import type { Memory, MemoryInsert, MemoryWithMedia } from "@/lib/database.types
 export interface SearchFilters {
   query?: string;
   year?: number;
-  location?: string;
-  tags?: string[];
-  mediaType?: "photo" | "video" | "voice";
+  memoryType?: string;
 }
+
+const TABLE = "memories" as const;
 
 export function useMemories(filters?: SearchFilters) {
   const [memories, setMemories] = useState<MemoryWithMedia[]>([]);
@@ -20,37 +20,43 @@ export function useMemories(filters?: SearchFilters) {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
-        .from("memories")
-        .select("*, memory_media(*)")
-        .order("memory_date", { ascending: false });
+      const buildQuery = (select: string) => {
+        let q = supabase
+          .from(TABLE)
+          .select(select)
+          .order("memory_date", { ascending: false });
 
-      if (filters?.query) {
-        query = query.or(
-          `title.ilike.%${filters.query}%,description.ilike.%${filters.query}%,location.ilike.%${filters.query}%`
-        );
+        if (filters?.query) {
+          q = q.or(`title.ilike.%${filters.query}%,body.ilike.%${filters.query}%`);
+        }
+        if (filters?.year) {
+          const start = `${filters.year}-01-01`;
+          const end   = `${filters.year}-12-31`;
+          q = q.gte("memory_date", start).lte("memory_date", end);
+        }
+        if (filters?.memoryType) {
+          q = q.eq("memory_type", filters.memoryType);
+        }
+        return q;
+      };
+
+      // Try with media join first; fall back to plain select on PGRST200
+      let { data, error: qErr } = await buildQuery("*, memory_media(*)");
+      if (qErr?.code === "PGRST200") {
+        console.warn("[useMemories] memory_media FK not found, fetching without media join");
+        ({ data, error: qErr } = await buildQuery("*"));
       }
-
-      if (filters?.year) {
-        const start = `${filters.year}-01-01`;
-        const end = `${filters.year}-12-31`;
-        query = query.gte("memory_date", start).lte("memory_date", end);
-      }
-
-      if (filters?.location) {
-        query = query.ilike("location", `%${filters.location}%`);
-      }
-
-      if (filters?.tags && filters.tags.length > 0) {
-        query = query.overlaps("tags", filters.tags);
-      }
-
-      const { data, error: qErr } = await query;
       if (qErr) throw qErr;
-      setMemories((data as unknown as MemoryWithMedia[]) ?? []);
+
+      // Attach empty memory_media array if join wasn't available
+      const rawRows = (data ?? []) as unknown as Record<string, unknown>[];
+      const rows = rawRows.map((m) =>
+        Array.isArray(m.memory_media) ? m : { ...m, memory_media: [] }
+      );
+      setMemories(rows as unknown as MemoryWithMedia[]);
     } catch (err) {
       const msg = interpretSupabaseError(err);
-      console.error("[useMemories] fetch error:", err);
+      console.error(`[useMemories] fetch error from table "${TABLE}":`, err);
       setError(msg);
     } finally {
       setLoading(false);
@@ -58,9 +64,7 @@ export function useMemories(filters?: SearchFilters) {
   }, [
     filters?.query,
     filters?.year,
-    filters?.location,
-    JSON.stringify(filters?.tags),
-    filters?.mediaType,
+    filters?.memoryType,
   ]);
 
   useEffect(() => {
@@ -77,20 +81,39 @@ export function useMemory(id: string) {
 
   useEffect(() => {
     if (!id) return;
-    supabase
-      .from("memories")
-      .select("*, memory_media(*)")
-      .eq("id", id)
-      .single()
-      .then(({ data, error: qErr }) => {
-        if (qErr) {
-          console.error("[useMemory] fetch error:", qErr);
-          setError(interpretSupabaseError(qErr));
-        } else {
-          setMemory(data as unknown as MemoryWithMedia);
-        }
-        setLoading(false);
-      });
+
+    const fetchOne = async () => {
+      // Try with media join first
+      let { data, error: qErr } = await supabase
+        .from(TABLE)
+        .select("*, memory_media(*)")
+        .eq("id", id)
+        .single();
+
+      // Fall back to plain select if no FK relation
+      if (qErr?.code === "PGRST200") {
+        console.warn("[useMemory] memory_media FK not found, fetching without media join");
+        ({ data, error: qErr } = await supabase
+          .from(TABLE)
+          .select("*")
+          .eq("id", id)
+          .single());
+      }
+
+      if (qErr) {
+        console.error(`[useMemory] fetch error from table "${TABLE}":`, qErr);
+        setError(interpretSupabaseError(qErr));
+      } else {
+        const row = data as Record<string, unknown>;
+        setMemory({
+          ...row,
+          memory_media: Array.isArray(row.memory_media) ? row.memory_media : [],
+        } as unknown as MemoryWithMedia);
+      }
+      setLoading(false);
+    };
+
+    fetchOne();
   }, [id]);
 
   return { memory, loading, error };
@@ -100,35 +123,59 @@ export async function createMemory(input: MemoryInsert): Promise<Memory> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated. Please sign in again.");
 
-  console.log("[createMemory] inserting:", { ...input, user_id: user.id });
+  const payload = { ...input, user_id: user.id };
+
+  // ── Detailed diagnostic logging ──────────────────────────────────────
+  console.group(`[createMemory] INSERT into "${TABLE}"`);
+  console.log("Table:  ", TABLE);
+  console.log("Columns being sent:", Object.keys(payload));
+  console.log("Full payload:", JSON.stringify(payload, null, 2));
+  console.groupEnd();
+  // ─────────────────────────────────────────────────────────────────────
 
   const { data, error } = await supabase
-    .from("memories")
-    .insert({ ...input, user_id: user.id })
+    .from(TABLE)
+    .insert(payload)
     .select()
     .single();
 
   if (error) {
-    console.error("[createMemory] Supabase error:", error);
+    console.group(`[createMemory] ❌ Supabase error on INSERT into "${TABLE}"`);
+    console.error("message :", error.message);
+    console.error("code    :", error.code);
+    console.error("hint    :", error.hint);
+    console.error("details :", error.details);
+    console.error("Full error object:", error);
+    console.error("Payload that caused this error:", JSON.stringify(payload, null, 2));
+    console.groupEnd();
     throw toError(interpretSupabaseError(error));
   }
 
-  console.log("[createMemory] success:", data);
+  console.log(`[createMemory] ✅ success, id=${(data as Memory).id}`);
   return data as Memory;
 }
 
 export async function updateMemory(id: string, input: Partial<MemoryInsert>): Promise<Memory> {
-  console.log("[updateMemory] updating:", id, input);
+  const payload = { ...input };
+  console.group(`[updateMemory] UPDATE "${TABLE}" id=${id}`);
+  console.log("Columns being sent:", Object.keys(payload));
+  console.log("Full payload:", JSON.stringify(payload, null, 2));
+  console.groupEnd();
 
   const { data, error } = await supabase
-    .from("memories")
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .from(TABLE)
+    .update(payload)
     .eq("id", id)
     .select()
     .single();
 
   if (error) {
-    console.error("[updateMemory] Supabase error:", error);
+    console.group(`[updateMemory] ❌ Supabase error on UPDATE "${TABLE}"`);
+    console.error("message :", error.message);
+    console.error("code    :", error.code);
+    console.error("hint    :", error.hint);
+    console.error("details :", error.details);
+    console.groupEnd();
     throw toError(interpretSupabaseError(error));
   }
 
@@ -136,9 +183,9 @@ export async function updateMemory(id: string, input: Partial<MemoryInsert>): Pr
 }
 
 export async function deleteMemory(id: string): Promise<void> {
-  const { error } = await supabase.from("memories").delete().eq("id", id);
+  const { error } = await supabase.from(TABLE).delete().eq("id", id);
   if (error) {
-    console.error("[deleteMemory] Supabase error:", error);
+    console.error(`[deleteMemory] Supabase error on DELETE "${TABLE}":`, error);
     throw toError(interpretSupabaseError(error));
   }
 }
@@ -148,13 +195,12 @@ export function useAvailableYears() {
 
   useEffect(() => {
     supabase
-      .from("memories")
+      .from(TABLE)
       .select("memory_date")
       .order("memory_date", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
-          // Silently ignore — years filter just won't show up
-          console.warn("[useAvailableYears] error:", error);
+          console.warn(`[useAvailableYears] error on "${TABLE}":`, error);
           return;
         }
         if (!data) return;

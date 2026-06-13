@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -11,13 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMemory, updateMemory } from "@/hooks/useMemories";
+import { getErrorMessage } from "@/lib/errors";
+import { MEMORY_TYPE_LABELS, type MemoryType } from "@/lib/database.types";
+
+const MEMORY_TYPES = Object.entries(MEMORY_TYPE_LABELS) as [MemoryType, string][];
 
 const schema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
+  title:       z.string().min(1, "Title is required"),
+  body:        z.string().optional(),
   memory_date: z.string().min(1, "Date is required"),
-  location: z.string().optional(),
-  tags: z.string().optional(),
+  memory_type: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -27,38 +29,31 @@ export default function EditMemoryPage({ id }: { id: string }) {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { title: "", description: "", memory_date: "", location: "", tags: "" },
+    defaultValues: { title: "", body: "", memory_date: "", memory_type: "" },
   });
 
   useEffect(() => {
     if (!memory) return;
     form.reset({
-      title: memory.title,
-      description: memory.description ?? "",
+      title:       memory.title,
+      body:        memory.body ?? "",
       memory_date: memory.memory_date,
-      location: memory.location ?? "",
-      tags: memory.tags?.join(", ") ?? "",
+      memory_type: memory.memory_type ?? "",
     });
   }, [memory, form]);
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const tags = values.tags
-        ? values.tags.split(",").map(t => t.trim()).filter(Boolean)
-        : undefined;
-
       await updateMemory(id, {
-        title: values.title,
-        description: values.description || null,
+        title:       values.title,
+        body:        values.body || null,
         memory_date: values.memory_date,
-        location: values.location || null,
-        tags: tags && tags.length > 0 ? tags : null,
+        memory_type: values.memory_type || null,
       });
-
       toast.success("Memory updated!");
       setLocation(`/memories/${id}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to update memory");
+      toast.error(getErrorMessage(err));
     }
   };
 
@@ -119,38 +114,37 @@ export default function EditMemoryPage({ id }: { id: string }) {
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="location" render={({ field }) => (
+            <FormField control={form.control} name="memory_type" render={({ field }) => (
               <FormItem>
-                <FormLabel>Location</FormLabel>
+                <FormLabel>Type</FormLabel>
                 <FormControl>
-                  <Input data-testid="input-location" placeholder="Where were you?" className="bg-card border-card-border" {...field} />
+                  <select
+                    data-testid="input-memory-type"
+                    className="w-full h-10 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    {...field}
+                  >
+                    <option value="">— Select type —</option>
+                    {MEMORY_TYPES.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
           </div>
 
-          <FormField control={form.control} name="description" render={({ field }) => (
+          <FormField control={form.control} name="body" render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <FormLabel>Story</FormLabel>
               <FormControl>
                 <Textarea
-                  data-testid="input-description"
+                  data-testid="input-body"
                   placeholder="Tell the story…"
-                  rows={4}
+                  rows={5}
                   className="bg-card border-card-border resize-none"
                   {...field}
                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-
-          <FormField control={form.control} name="tags" render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tags</FormLabel>
-              <FormControl>
-                <Input data-testid="input-tags" placeholder="family, travel, birthday" className="bg-card border-card-border" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

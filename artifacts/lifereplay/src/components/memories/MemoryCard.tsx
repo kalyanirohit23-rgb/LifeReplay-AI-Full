@@ -1,7 +1,8 @@
 import { Link } from "wouter";
-import { MapPin, Image, Video, Mic, Calendar } from "lucide-react";
+import { Image, Video, Mic, Calendar, Tag } from "lucide-react";
 import { format } from "date-fns";
 import type { MemoryWithMedia } from "@/lib/database.types";
+import { MEMORY_TYPE_LABELS } from "@/lib/database.types";
 
 interface MemoryCardProps {
   memory: MemoryWithMedia;
@@ -22,10 +23,14 @@ function getGradient(id: string) {
 }
 
 export default function MemoryCard({ memory, className = "" }: MemoryCardProps) {
-  const photos = memory.memory_media?.filter((m) => m.type === "photo") ?? [];
-  const videos = memory.memory_media?.filter((m) => m.type === "video") ?? [];
-  const voices = memory.memory_media?.filter((m) => m.type === "voice") ?? [];
+  const photos  = memory.memory_media?.filter((m) => m.type === "photo") ?? [];
+  const videos  = memory.memory_media?.filter((m) => m.type === "video") ?? [];
+  const voices  = memory.memory_media?.filter((m) => m.type === "voice") ?? [];
   const coverPhoto = photos[0];
+
+  const typeLabel = memory.memory_type
+    ? (MEMORY_TYPE_LABELS[memory.memory_type as keyof typeof MEMORY_TYPE_LABELS] ?? memory.memory_type)
+    : null;
 
   return (
     <Link
@@ -78,28 +83,13 @@ export default function MemoryCard({ memory, className = "" }: MemoryCardProps) 
             <Calendar size={11} />
             {format(new Date(memory.memory_date), "MMM d, yyyy")}
           </span>
-          {memory.location && (
+          {typeLabel && (
             <span className="flex items-center gap-1">
-              <MapPin size={11} />
-              {memory.location}
+              <Tag size={11} />
+              {typeLabel}
             </span>
           )}
         </div>
-        {memory.tags && memory.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {memory.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full"
-              >
-                {tag}
-              </span>
-            ))}
-            {memory.tags.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{memory.tags.length - 3}</span>
-            )}
-          </div>
-        )}
       </div>
     </Link>
   );

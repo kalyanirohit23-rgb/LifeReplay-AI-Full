@@ -1,5 +1,24 @@
 export type MediaType = "photo" | "video" | "voice";
 
+export type MemoryType =
+  | "personal"
+  | "travel"
+  | "family"
+  | "work"
+  | "celebration"
+  | "milestone"
+  | "other";
+
+export const MEMORY_TYPE_LABELS: Record<MemoryType, string> = {
+  personal:    "Personal",
+  travel:      "Travel",
+  family:      "Family",
+  work:        "Work",
+  celebration: "Celebration",
+  milestone:   "Milestone",
+  other:       "Other",
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -8,34 +27,31 @@ export type Database = {
           id: string;
           user_id: string;
           title: string;
-          description: string | null;
+          body: string | null;
           memory_date: string;
-          location: string | null;
-          tags: string[] | null;
+          memory_type: string | null;
+          location_id: string | null;
           created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
           user_id?: string;
           title: string;
-          description?: string | null;
+          body?: string | null;
           memory_date: string;
-          location?: string | null;
-          tags?: string[] | null;
+          memory_type?: string | null;
+          location_id?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
           title?: string;
-          description?: string | null;
+          body?: string | null;
           memory_date?: string;
-          location?: string | null;
-          tags?: string[] | null;
+          memory_type?: string | null;
+          location_id?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
         Relationships: [];
       };
@@ -94,7 +110,7 @@ export type Database = {
   };
 };
 
-export type Memory = Database["public"]["Tables"]["memories"]["Row"];
+export type Memory    = Database["public"]["Tables"]["memories"]["Row"];
 export type MemoryInsert = Database["public"]["Tables"]["memories"]["Insert"];
 
 export type MemoryMedia = Database["public"]["Tables"]["memory_media"]["Row"] & {

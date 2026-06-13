@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, MapPin, Calendar, Pencil, Trash2, Image, Video, Mic, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Calendar, Pencil, Trash2, Image, Video, Mic, X, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useMemory, deleteMemory } from "@/hooks/useMemories";
@@ -10,6 +10,8 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { MemoryMedia } from "@/lib/database.types";
+import { MEMORY_TYPE_LABELS } from "@/lib/database.types";
+import { getErrorMessage } from "@/lib/errors";
 
 function Lightbox({ photos, initialIndex, onClose }: {
   photos: MemoryMedia[];
@@ -84,7 +86,7 @@ export default function MemoryDetailPage({ id }: { id: string }) {
       toast.success("Memory deleted");
       setLocation("/timeline");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete");
+      toast.error(getErrorMessage(err));
     }
   };
 
@@ -111,6 +113,9 @@ export default function MemoryDetailPage({ id }: { id: string }) {
   }
 
   const coverPhoto = photos[0];
+  const typeLabel = memory.memory_type
+    ? (MEMORY_TYPE_LABELS[memory.memory_type as keyof typeof MEMORY_TYPE_LABELS] ?? memory.memory_type)
+    : null;
 
   return (
     <div className="flex flex-col max-w-2xl mx-auto w-full pb-10">
@@ -185,28 +190,19 @@ export default function MemoryDetailPage({ id }: { id: string }) {
               <Calendar size={14} />
               {format(new Date(memory.memory_date), "MMMM d, yyyy")}
             </span>
-            {memory.location && (
+            {typeLabel && (
               <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <MapPin size={14} />
-                {memory.location}
+                <Tag size={14} />
+                {typeLabel}
               </span>
             )}
           </div>
-          {memory.tags && memory.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {memory.tags.map((tag) => (
-                <span key={tag} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* Description */}
-        {memory.description && (
+        {/* Body (was description) */}
+        {memory.body && (
           <div>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{memory.description}</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{memory.body}</p>
           </div>
         )}
 
