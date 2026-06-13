@@ -9,6 +9,7 @@ import CreateMemoryPage from "@/pages/CreateMemoryPage";
 import MemoryDetailPage from "@/pages/MemoryDetailPage";
 import EditMemoryPage from "@/pages/EditMemoryPage";
 import SearchPage from "@/pages/SearchPage";
+import ProfilePage from "@/pages/ProfilePage";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -64,6 +65,9 @@ function Router() {
         </Route>
         <Route path="/search">
           <AppLayout><SearchPage /></AppLayout>
+        </Route>
+        <Route path="/profile">
+          <AppLayout><ProfilePage /></AppLayout>
         </Route>
         <Route component={NotFound} />
       </Switch>

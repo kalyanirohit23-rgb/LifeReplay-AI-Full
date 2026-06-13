@@ -147,38 +147,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                data-testid="button-mobile-user-menu"
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${
-                  location === "/profile" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <User size={22} />
-                <span className="text-[10px] font-medium">Profile</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="end">
-              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate max-w-[200px]">
-                {user?.email}
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <ThemeToggle />
-                <span className="ml-1">Toggle theme</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                data-testid="button-mobile-sign-out"
-                onClick={handleSignOut}
-                className="text-destructive focus:text-destructive"
-              >
-                <LogOut size={14} className="mr-2" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link
+            href="/profile"
+            data-testid="link-mobile-nav-profile"
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${
+              location === "/profile" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <User size={22} />
+            <span className="text-[10px] font-medium">Profile</span>
+          </Link>
         </div>
       </nav>
     </div>
