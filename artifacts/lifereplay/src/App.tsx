@@ -11,8 +11,11 @@ import MemoryDetailPage from "@/pages/MemoryDetailPage";
 import EditMemoryPage from "@/pages/EditMemoryPage";
 import SearchPage from "@/pages/SearchPage";
 import ProfilePage from "@/pages/ProfilePage";
+import LandingPage from "@/pages/LandingPage";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/layout/AppLayout";
+
+const PUBLIC_ROUTES = new Set(["/", "/landing"]);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -27,7 +30,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
 
-    if (!user && location !== "/") {
+    if (!user && !PUBLIC_ROUTES.has(location)) {
       navigate("/");
     } else if (user && location === "/") {
       navigate("/dashboard");
@@ -46,7 +49,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   // While redirect is pending don't flash the wrong page
-  if (!user && location !== "/") return null;
+  if (!user && !PUBLIC_ROUTES.has(location)) return null;
   if (user && location === "/") return null;
 
   return <>{children}</>;
@@ -57,6 +60,7 @@ function Router() {
     <AuthGuard>
       <Switch>
         <Route path="/" component={LoginPage} />
+        <Route path="/landing" component={LandingPage} />
         <Route path="/dashboard">
           <AppLayout><DashboardPage /></AppLayout>
         </Route>
