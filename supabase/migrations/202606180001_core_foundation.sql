@@ -21,6 +21,7 @@ create table if not exists public.memories (
   updated_at    timestamptz default now() not null
 );
 
+-- Backfill for repositories where memories table already exists from earlier versions.
 alter table public.memories add column if not exists mood text;
 alter table public.memories add column if not exists tags text[] default '{}'::text[] not null;
 alter table public.memories add column if not exists people text[] default '{}'::text[] not null;

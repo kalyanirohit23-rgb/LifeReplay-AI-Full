@@ -2,25 +2,35 @@ import type { NextFunction, Request, Response } from "express";
 
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? 120);
-
 interface BucketState {
   count: number;
   resetAt: number;
 }
 
+// In-memory limiter is intentionally simple for single-instance deployments.
+// Use a shared store (Redis/Upstash) for horizontally scaled production setups.
 const buckets = new Map<string, BucketState>();
+let lastPruneAt = 0;
 
 function getClientIdentifier(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0]!.trim();
-  }
   return req.ip || "unknown";
+}
+
+function pruneExpiredBuckets(now: number) {
+  for (const [key, state] of buckets.entries()) {
+    if (state.resetAt <= now) {
+      buckets.delete(key);
+    }
+  }
 }
 
 export function rateLimit(req: Request, res: Response, next: NextFunction) {
   const now = Date.now();
-  const key = `${getClientIdentifier(req)}:${req.path}`;
+  if (now - lastPruneAt >= WINDOW_MS) {
+    pruneExpiredBuckets(now);
+    lastPruneAt = now;
+  }
+  const key = getClientIdentifier(req);
   const current = buckets.get(key);
 
   if (!current || current.resetAt <= now) {

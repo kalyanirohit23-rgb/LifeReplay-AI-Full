@@ -8,10 +8,24 @@ create table if not exists public.memory_embeddings (
   memory_id      uuid primary key references public.memories(id) on delete cascade,
   user_id        uuid references auth.users(id) on delete cascade not null,
   content        text not null,
+  -- 1536 matches text-embedding-3-small; keep in sync with embedding_model.
   embedding      vector(1536) not null,
   embedding_model text not null default 'text-embedding-3-small',
   updated_at     timestamptz default now() not null
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'memory_embeddings_model_check'
+  ) then
+    alter table public.memory_embeddings
+      add constraint memory_embeddings_model_check
+      check (embedding_model = 'text-embedding-3-small');
+  end if;
+end $$;
 
 alter table public.memory_embeddings enable row level security;
 
@@ -38,6 +52,7 @@ create policy "Users can delete own memory embeddings"
 
 create index if not exists memory_embeddings_user_idx on public.memory_embeddings(user_id);
 create index if not exists memory_embeddings_vector_idx
+  -- 'lists = 100' targets mid-sized collections (~10k-100k rows); tune per dataset scale.
   on public.memory_embeddings using ivfflat (embedding vector_cosine_ops) with (lists = 100);
 
 create index if not exists memories_search_title_trgm on public.memories using gin (title gin_trgm_ops);

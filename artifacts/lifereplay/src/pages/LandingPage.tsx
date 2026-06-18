@@ -44,12 +44,12 @@ export default function LandingPage() {
           Premium memory intelligence for stories, search, timelines, replays, and legacy.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="mailto:waitlist@lifereplay.app?subject=LifeReplay%20Waitlist"
+          <Link
+            href="/?intent=waitlist"
             className="px-6 py-3 rounded-xl bg-amber-500 text-black font-semibold hover:bg-amber-400 transition-colors"
           >
             Join Waitlist
-          </a>
+          </Link>
           <Link
             href="/"
             className="px-6 py-3 rounded-xl border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-colors"

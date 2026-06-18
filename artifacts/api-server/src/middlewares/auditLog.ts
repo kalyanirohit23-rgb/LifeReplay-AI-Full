@@ -18,7 +18,10 @@ export function auditLog(req: Request, res: Response, next: NextFunction) {
 
   const startedAt = Date.now();
   const actor = extractActor(req);
-  const reqId = req.id;
+  const headerRequestId = req.headers["x-request-id"];
+  const reqId =
+    (req as Request & { id?: string }).id ??
+    (typeof headerRequestId === "string" ? headerRequestId : undefined);
   const path = req.originalUrl || req.url;
 
   res.on("finish", () => {

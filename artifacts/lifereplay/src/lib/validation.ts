@@ -10,7 +10,18 @@ export const memoryDraftSchema = z.object({
   place: z.string().max(120).optional(),
 });
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const defaultMaxMb = 50;
+const parsedEnvMaxMb = Number.parseInt(
+  String(import.meta.env.VITE_MAX_UPLOAD_MB ?? defaultMaxMb),
+  10,
+);
+if (import.meta.env.VITE_MAX_UPLOAD_MB && !Number.isFinite(parsedEnvMaxMb)) {
+  console.warn("[validation] Invalid VITE_MAX_UPLOAD_MB. Falling back to default 50MB.");
+}
+const MAX_FILE_SIZE_BYTES =
+  Number.isFinite(parsedEnvMaxMb) && parsedEnvMaxMb > 0
+    ? Math.floor(parsedEnvMaxMb * 1024 * 1024)
+    : defaultMaxMb * 1024 * 1024;
 
 const MIME_BY_MEDIA_TYPE: Record<MediaType, string[]> = {
   photo: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
@@ -20,7 +31,7 @@ const MIME_BY_MEDIA_TYPE: Record<MediaType, string[]> = {
 
 export function validateMediaFile(file: File, type: MediaType): string | null {
   if (file.size <= 0) return "File is empty";
-  if (file.size > MAX_FILE_SIZE_BYTES) return "File exceeds 50MB limit";
+  if (file.size > MAX_FILE_SIZE_BYTES) return `File exceeds ${Math.round(MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB limit`;
 
   const allowed = MIME_BY_MEDIA_TYPE[type];
   if (allowed.length > 0 && !allowed.includes(file.type)) {
