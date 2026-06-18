@@ -4,6 +4,7 @@ import { ArrowLeft, Image, Video, Mic, Square, X, Plus, AlertCircle } from "luci
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
