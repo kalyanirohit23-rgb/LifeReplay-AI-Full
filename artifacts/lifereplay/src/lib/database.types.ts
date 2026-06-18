@@ -31,7 +31,14 @@ export type Database = {
           memory_date: string;
           memory_type: string | null;
           location_id: string | null;
+          mood: string | null;
+          tags: string[];
+          people: string[];
+          place: string | null;
+          is_favorite: boolean;
+          metadata: Record<string, unknown>;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -41,7 +48,14 @@ export type Database = {
           memory_date: string;
           memory_type?: string | null;
           location_id?: string | null;
+          mood?: string | null;
+          tags?: string[];
+          people?: string[];
+          place?: string | null;
+          is_favorite?: boolean;
+          metadata?: Record<string, unknown>;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -51,7 +65,14 @@ export type Database = {
           memory_date?: string;
           memory_type?: string | null;
           location_id?: string | null;
+          mood?: string | null;
+          tags?: string[];
+          people?: string[];
+          place?: string | null;
+          is_favorite?: boolean;
+          metadata?: Record<string, unknown>;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -94,12 +115,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      memory_embeddings: {
+        Row: {
+          memory_id: string;
+          user_id: string;
+          content: string;
+          embedding: number[];
+          embedding_model: string;
+          updated_at: string;
+        };
+        Insert: {
+          memory_id: string;
+          user_id: string;
+          content: string;
+          embedding: number[];
+          embedding_model?: string;
+          updated_at?: string;
+        };
+        Update: {
+          memory_id?: string;
+          user_id?: string;
+          content?: string;
+          embedding?: number[];
+          embedding_model?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      match_memories_hybrid: {
+        Args: {
+          query_embedding: number[];
+          query_text: string;
+          match_count?: number;
+        };
+        Returns: {
+          memory_id: string;
+          vector_score: number;
+          keyword_score: number;
+          hybrid_score: number;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

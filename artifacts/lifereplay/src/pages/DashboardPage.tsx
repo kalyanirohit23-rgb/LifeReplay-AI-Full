@@ -4,82 +4,7 @@ import { Plus, Image, Video, Mic, BookOpen, Clock, ArrowRight, AlertTriangle, Ch
 import { useAuth } from "@/hooks/useAuth";
 import { useMemories } from "@/hooks/useMemories";
 import MemoryCard from "@/components/memories/MemoryCard";
-
-const STORAGE_POLICY_SQL = `-- Run in Supabase Dashboard → SQL Editor → New Query
--- Configures storage policies for the memory-media bucket
-
--- 1. Authenticated users can upload files
-create policy "Authenticated users can upload media"
-  on storage.objects for insert
-  to authenticated
-  with check (bucket_id = 'memory-media');
-
--- 2. Authenticated users can view files
-create policy "Authenticated users can view media"
-  on storage.objects for select
-  to authenticated
-  using (bucket_id = 'memory-media');
-
--- Also allow public/anon reads (needed for public bucket URLs in <img> tags)
-create policy "Public can view media"
-  on storage.objects for select
-  to anon
-  using (bucket_id = 'memory-media');
-
--- 3. Users can only delete their own files
--- Path format: {user_id}/{memory_id}/{type}/{filename}
-create policy "Users can delete own media"
-  on storage.objects for delete
-  to authenticated
-  using (
-    bucket_id = 'memory-media'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );`;
-
-const SETUP_SQL = `-- Run this in Supabase Dashboard → SQL Editor → New Query
-
-create extension if not exists "uuid-ossp";
-
-create table if not exists public.memories (
-  id            uuid default uuid_generate_v4() primary key,
-  user_id       uuid references auth.users(id) on delete cascade not null,
-  title         text not null,
-  body          text,
-  memory_date   date not null,
-  memory_type   text check (memory_type in ('personal','travel','family','work','celebration','milestone','other')),
-  location_id   uuid,
-  created_at    timestamptz default now() not null
-);
-
-create table if not exists public.memory_media (
-  id               uuid default uuid_generate_v4() primary key,
-  memory_id        uuid references public.memories(id) on delete cascade not null,
-  user_id          uuid references auth.users(id) on delete cascade not null,
-  type             text check (type in ('photo', 'video', 'voice')) not null,
-  file_name        text not null,
-  file_url         text not null,
-  file_size        bigint,
-  mime_type        text,
-  duration_seconds integer,
-  created_at       timestamptz default now() not null
-);
-
-alter table public.memories enable row level security;
-alter table public.memory_media enable row level security;
-
-create policy "Users can view own memories"   on public.memories for select using (auth.uid() = user_id);
-create policy "Users can insert own memories" on public.memories for insert with check (auth.uid() = user_id);
-create policy "Users can update own memories" on public.memories for update using (auth.uid() = user_id);
-create policy "Users can delete own memories" on public.memories for delete using (auth.uid() = user_id);
-
-create policy "Users can view own media"   on public.memory_media for select using (auth.uid() = user_id);
-create policy "Users can insert own media" on public.memory_media for insert with check (auth.uid() = user_id);
-create policy "Users can update own media" on public.memory_media for update using (auth.uid() = user_id);
-create policy "Users can delete own media" on public.memory_media for delete using (auth.uid() = user_id);
-
-create index if not exists memories_user_id_idx    on public.memories(user_id);
-create index if not exists memories_date_idx       on public.memories(memory_date desc);
-create index if not exists memory_media_memory_idx on public.memory_media(memory_id);`;
+import { CORE_SETUP_SQL, STORAGE_POLICY_SQL } from "@/lib/supabaseSetupSql";
 
 function DatabaseSetupBanner({ error }: { error: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -100,7 +25,7 @@ function DatabaseSetupBanner({ error }: { error: string }) {
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(SETUP_SQL);
+    await navigator.clipboard.writeText(CORE_SETUP_SQL);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -113,6 +38,7 @@ function DatabaseSetupBanner({ error }: { error: string }) {
           <p className="text-sm font-semibold text-foreground">Database tables need to be created</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             Run the SQL script below in your Supabase dashboard to set up the memories and media tables.
+            Keep migration files in <code className="font-mono">supabase/migrations</code> as source of truth.
           </p>
           <a
             href="https://supabase.com/dashboard"
@@ -143,7 +69,7 @@ function DatabaseSetupBanner({ error }: { error: string }) {
             </button>
           </div>
           <pre className="p-4 text-xs font-mono text-muted-foreground overflow-x-auto max-h-48 whitespace-pre-wrap break-all bg-muted/30">
-            {SETUP_SQL}
+            {CORE_SETUP_SQL}
           </pre>
         </div>
       )}

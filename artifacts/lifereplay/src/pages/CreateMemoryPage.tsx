@@ -4,7 +4,6 @@ import { ArrowLeft, Image, Video, Mic, Square, X, Plus, AlertCircle } from "luci
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -14,14 +13,15 @@ import { createMemory, type CreateMemoryInput } from "@/hooks/useMemories";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { getErrorMessage } from "@/lib/errors";
 import { MEMORY_TYPE_LABELS, type MemoryType } from "@/lib/database.types";
+import { memoryDraftSchema } from "@/lib/validation";
 
 const MEMORY_TYPES = Object.entries(MEMORY_TYPE_LABELS) as [MemoryType, string][];
 
-const schema = z.object({
-  title:       z.string().min(1, "Title is required"),
-  body:        z.string().optional(),
-  memory_date: z.string().min(1, "Date is required"),
-  memory_type: z.string().optional(),
+const schema = memoryDraftSchema.pick({
+  title: true,
+  body: true,
+  memory_date: true,
+  memory_type: true,
 });
 type FormValues = z.infer<typeof schema>;
 

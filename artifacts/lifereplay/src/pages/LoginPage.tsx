@@ -10,6 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Link } from "wouter";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -361,6 +362,9 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-muted-foreground mt-5">
           Your memories are private and encrypted.
+        </p>
+        <p className="text-center text-xs mt-2">
+          <Link href="/landing" className="text-primary hover:underline">View product preview</Link>
         </p>
       </div>
     </div>

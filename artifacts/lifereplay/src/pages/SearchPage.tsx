@@ -5,6 +5,7 @@ import MemoryCard from "@/components/memories/MemoryCard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MEMORY_TYPE_LABELS } from "@/lib/database.types";
+import { AI_GROUNDING_POLICY, featureFlags } from "@/lib/featureFlags";
 
 function MemorySkeleton() {
   return (
@@ -137,20 +138,22 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* AI Search — placeholder */}
+      {/* AI Search */}
       <div className="bg-card border border-card-border rounded-2xl p-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-card/60 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-2xl">
-          <div className="flex flex-col items-center gap-2 text-center px-4">
-            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs px-3 py-1">
-              Coming Soon
-            </Badge>
-            <p className="text-sm font-semibold text-foreground">AI-powered memory search</p>
-            <p className="text-xs text-muted-foreground max-w-xs">
-              Search your memories using natural language. "Show me summer trips" or "Find photos from my birthday."
-            </p>
+        {!featureFlags.aiSemanticSearch && (
+          <div className="absolute inset-0 bg-card/60 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-2xl">
+            <div className="flex flex-col items-center gap-2 text-center px-4">
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs px-3 py-1">
+                Coming Soon
+              </Badge>
+              <p className="text-sm font-semibold text-foreground">AI-powered memory search</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Search your memories using natural language. "Show me summer trips" or "Find photos from my birthday."
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="opacity-30 pointer-events-none select-none">
+        )}
+        <div className={`${!featureFlags.aiSemanticSearch ? "opacity-30 pointer-events-none select-none" : ""}`}>
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={14} className="text-amber-400" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI search</span>
@@ -163,6 +166,7 @@ export default function SearchPage() {
           <button disabled className="mt-2 w-full bg-primary/30 text-primary-foreground/50 py-2 rounded-xl text-sm font-medium">
             Search with AI
           </button>
+          <p className="text-[11px] text-muted-foreground mt-2">{AI_GROUNDING_POLICY}</p>
         </div>
       </div>
 

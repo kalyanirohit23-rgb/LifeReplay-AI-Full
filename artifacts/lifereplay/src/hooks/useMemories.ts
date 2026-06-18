@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toError, interpretSupabaseError } from "@/lib/errors";
 import type { Memory, MemoryInsert, MemoryWithMedia } from "@/lib/database.types";
+import { memoryDraftSchema } from "@/lib/validation";
 
 export interface SearchFilters {
   query?: string;
@@ -127,6 +128,10 @@ export interface CreateMemoryInput {
 }
 
 export async function createMemory(input: CreateMemoryInput): Promise<Memory> {
+  const validatedInput = memoryDraftSchema
+    .pick({ title: true, body: true, memory_date: true, memory_type: true })
+    .parse(input);
+
   // ── 1. Get authenticated user ─────────────────────────────────────────
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -144,10 +149,10 @@ export async function createMemory(input: CreateMemoryInput): Promise<Memory> {
     memory_type: string | null;
   } = {
     user_id:     user.id,
-    title:       input.title,
-    body:        input.body,
-    memory_date: input.memory_date,
-    memory_type: input.memory_type,
+    title:       validatedInput.title,
+    body:        validatedInput.body ?? null,
+    memory_date: validatedInput.memory_date,
+    memory_type: validatedInput.memory_type ?? null,
   };
 
   // ── 3. Log exact payload before insert ───────────────────────────────

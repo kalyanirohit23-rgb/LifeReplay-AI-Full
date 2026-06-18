@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toError, interpretSupabaseError } from "@/lib/errors";
 import type { MediaType, MemoryMedia, MemoryMediaInsert } from "@/lib/database.types";
+import { validateMediaFile } from "@/lib/validation";
 
 const BUCKET = "memory-media" as const;
 
@@ -24,6 +25,11 @@ export function useMediaUpload() {
     // ── Auth ──────────────────────────────────────────────────────────
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
+
+    const validationError = validateMediaFile(file, type);
+    if (validationError) {
+      throw new Error(validationError);
+    }
 
     // ── Build storage path ────────────────────────────────────────────
     const ext      = file.name.split(".").pop() ?? "bin";
